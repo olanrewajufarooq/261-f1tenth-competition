@@ -3,7 +3,8 @@
 
 import math
 
-from quick_chase_controller.reference_path import ReferencePath
+
+from quick_chase_controller.planning.reference_path import ReferencePath
 
 
 class PurePursuitController:

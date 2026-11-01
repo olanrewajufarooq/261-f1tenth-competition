@@ -2,7 +2,7 @@
 
 import unittest
 
-from quick_chase_controller.sensor_safety import SensorSafety
+from quick_chase_controller.safety.sensor_safety import SensorSafety
 
 
 class TestSensorSafety(unittest.TestCase):

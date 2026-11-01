@@ -13,14 +13,18 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
 
-from quick_chase_controller.collision_avoidance import CollisionAvoidance
-from quick_chase_controller.clearance_path_planner import ClearancePathPlanner
-from quick_chase_controller.sensor_safety import SensorSafety
-from quick_chase_controller.occupancy_map import OccupancyMap
-from quick_chase_controller.pure_pursuit_controller import PurePursuitController
-from quick_chase_controller.reference_path import ReferencePath
-from quick_chase_controller.speed_profile import SpeedProfile
 
+from quick_chase_controller.control.pure_pursuit_controller import (
+    PurePursuitController,
+)
+from quick_chase_controller.control.speed_profile import SpeedProfile
+from quick_chase_controller.planning.clearance_path_planner import (
+    ClearancePathPlanner,
+)
+from quick_chase_controller.planning.occupancy_map import OccupancyMap
+from quick_chase_controller.planning.reference_path import ReferencePath
+from quick_chase_controller.safety.collision_avoidance import CollisionAvoidance
+from quick_chase_controller.safety.sensor_safety import SensorSafety
 
 class ControllerNode(Node):
     """Connect ROS sensor messages to the independent controller classes."""

@@ -5,8 +5,8 @@ import unittest
 
 from PIL import Image
 
-from quick_chase_controller.collision_avoidance import CollisionAvoidance
-from quick_chase_controller.occupancy_map import OccupancyMap
+from quick_chase_controller.safety.collision_avoidance import CollisionAvoidance
+from quick_chase_controller.planning.occupancy_map import OccupancyMap
 
 
 class TestCollisionAvoidance(unittest.TestCase):

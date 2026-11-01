@@ -5,7 +5,7 @@ import unittest
 
 from PIL import Image
 
-from quick_chase_controller.occupancy_map import OccupancyMap
+from quick_chase_controller.planning.occupancy_map import OccupancyMap
 
 
 class TestOccupancyMap(unittest.TestCase):

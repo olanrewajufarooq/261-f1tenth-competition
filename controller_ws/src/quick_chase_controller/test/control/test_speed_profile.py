@@ -3,8 +3,8 @@
 import math
 import unittest
 
-from quick_chase_controller.reference_path import ReferencePath
-from quick_chase_controller.speed_profile import SpeedProfile
+from quick_chase_controller.planning.reference_path import ReferencePath
+from quick_chase_controller.control.speed_profile import SpeedProfile
 
 
 class TestSpeedProfile(unittest.TestCase):

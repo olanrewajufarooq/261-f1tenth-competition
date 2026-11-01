@@ -3,9 +3,9 @@ import numpy as np
 from PIL import Image
 import pytest
 
-from quick_chase_controller.reference_path import ReferencePath
-from quick_chase_controller.occupancy_map import OccupancyMap
-from quick_chase_controller.clearance_path_planner import ClearancePathPlanner, PlanningError
+from quick_chase_controller.planning.reference_path import ReferencePath
+from quick_chase_controller.planning.occupancy_map import OccupancyMap
+from quick_chase_controller.planning.clearance_path_planner import ClearancePathPlanner, PlanningError
 
 
 def ring(radius=3.4):
