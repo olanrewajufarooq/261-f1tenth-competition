@@ -3,9 +3,14 @@
 Native ROS 2 starter workspace for the CIE-KFUPM F1TENTH Autonomous Racing
 Competition.
 
+This branch adapts the V1.1 competition starter workspace for **ROS 2 Lyrical
+Luth on Ubuntu 26.04 LTS**. The port is experimental pending native build and
+simulator validation; see [validation status](docs/LYRICAL_VALIDATION.md).
+The `v1.1` branch retains the original ROS 2 Jazzy / Ubuntu 24.04 setup.
+
 This repository gives students:
 
-- a validated Ubuntu 24.04 and ROS 2 Jazzy simulator setup;
+- an Ubuntu 26.04 and ROS 2 Lyrical simulator setup;
 - pinned F1TENTH simulator revisions;
 - RViz with a fixed F1-style race dashboard, plus Foxglove instructions;
 - a live lap timer, completed-lap counter, best time, and lap history;
@@ -13,10 +18,10 @@ This repository gives students:
 - a documented ROS topic interface for student-written controllers;
 - repeatable setup, launch, stop, and smoke-test commands.
 
-## Validated platform
+## Target platform
 
-- Ubuntu 24.04.5 LTS, x86_64
-- ROS 2 Jazzy Jalisco
+- Ubuntu 26.04 LTS, x86_64
+- ROS 2 Lyrical Luth
 - Native installation
 - Python virtual environment with system ROS packages
 - RViz and Foxglove
@@ -24,19 +29,19 @@ This repository gives students:
 
 ## Quick start
 
-First install ROS 2 Jazzy Desktop and the prerequisites in
+First install ROS 2 Lyrical Desktop and the prerequisites in
 [docs/INSTALL.md](docs/INSTALL.md). Then:
 
 ```bash
-git clone --branch v1.1 --single-branch \
-  https://github.com/KayiiX/CIE-KFUPM-F1tenth-Autonomous-Racing-Competition.git
-cd CIE-KFUPM-F1tenth-Autonomous-Racing-Competition
+git clone --branch lyrical --single-branch \
+  https://github.com/olanrewajufarooq/261-f1tenth-competition.git
+cd 261-f1tenth-competition
 
 ./scripts/setup_workspace.sh
 ```
 
-The `v1.1` branch is the current competition version. The `v1` branch remains
-available as the earlier first-edition version. The competition stages and
+The `lyrical` branch contains this platform adaptation. The `v1.1` branch is
+the original Jazzy competition version; `v1` is the earlier first edition. The competition stages and
 rules are in [docs/COMPETITION_RULES.md](docs/COMPETITION_RULES.md).
 
 ### Terminal 1: simulator and RViz
@@ -117,7 +122,7 @@ a pose on `/initialpose`.
 
 The [controller package and submission guide](docs/CONTROLLER_SUBMISSION_GUIDE.md) explains how to create, build, test, and submit a Python ROS 2 controller. It also links to the official F1TENTH labs for algorithm examples.
 
-## Tested revisions
+## Pinned simulator revisions
 
 | Component | Branch | Commit |
 |---|---|---|
@@ -128,8 +133,10 @@ The [controller package and submission guide](docs/CONTROLLER_SUBMISSION_GUIDE.m
 
 This starter workspace uses the official
 [F1TENTH Gym ROS repository (`dev-jazzy` branch)](https://github.com/f1tenth/f1tenth_gym_ros/tree/dev-jazzy).
-The setup script clones that repository and checks out the tested revision listed
-above so every student uses the same simulator version.
+The setup script clones that repository and checks out the pinned revision listed
+above so every student uses the same simulator version. The upstream
+branch is named `dev-jazzy`; this adaptation builds that pinned source against
+Lyrical, rather than selecting a different simulator implementation.
 
 ## Repository layout
 
@@ -140,13 +147,15 @@ above so every student uses the same simulator version.
 ├── docs/
 │   ├── COMPETITION_RULES.md
 │   ├── CONTROLLER_SUBMISSION_GUIDE.md
-│   └── INSTALL.md
+│   ├── INSTALL.md
+│   └── LYRICAL_VALIDATION.md
 ├── scripts/
 │   ├── launch_ps5_teleop.sh
 │   ├── launch_sim.sh
 │   ├── setup_workspace.sh
 │   ├── smoke_test.sh
-│   └── stop_car.sh
+│   ├── stop_car.sh
+│   └── ros_environment.sh
 └── starter_ws/
     └── src/
         ├── competition_bringup/
@@ -156,7 +165,7 @@ above so every student uses the same simulator version.
 ```
 
 The setup script creates `starter_ws/.venv`, clones the pinned simulator source
-under `starter_ws/src`, and generates `build`, `install`, and `log`. Those
+under `starter_ws/src`, and generates `build`, `install`, and `log`. A `.platform` marker records the ROS distribution and Python minor version. These
 machine-generated paths are intentionally ignored by Git.
 
 ## Safety

@@ -8,7 +8,7 @@
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake_ros</buildtool_depend>
-  <build_depend>qtbase5-dev</build_depend>
+  <build_depend>qt6-base-dev</build_depend>
 
   <depend>pluginlib</depend>
   <depend>rclcpp</depend>

@@ -21,7 +21,7 @@ Use the topic names and message types above unless the organizers publish a diff
 Open a terminal and create a separate workspace for your controller:
 
 ~~~bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/lyrical/setup.bash
 mkdir -p ~/controller_ws/src
 cd ~/controller_ws/src
 ros2 pkg create --build-type ament_python --license MIT \
@@ -93,7 +93,7 @@ The simulator repository provides the ROS environment and Python virtual environ
 Replace `<competition-repo>` with the actual path where you cloned the competition repository:
 
 ~~~bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/lyrical/setup.bash
 source <competition-repo>/starter_ws/.venv/bin/activate
 source <competition-repo>/starter_ws/install/setup.bash
 
@@ -126,7 +126,7 @@ cd <competition-repo>
 **Terminal 2 — source the environments and start your node:**
 
 ~~~bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/lyrical/setup.bash
 source <competition-repo>/starter_ws/.venv/bin/activate
 source <competition-repo>/starter_ws/install/setup.bash
 source ~/controller_ws/install/setup.bash
@@ -145,7 +145,7 @@ During a controller run, the controller should subscribe to the sensor topics an
 
 ## 5. Rules your package must follow
 
-- Build as a ROS 2 Jazzy `ament_python` package.
+- Build as a ROS 2 Lyrical `ament_python` package.
 - Provide one executable named `controller`, runnable with `ros2 run <your_package> controller`.
 - Subscribe to the required topic names and message types listed in Section 1.
 - Publish valid `AckermannDriveStamped` commands to `/drive`; set the message timestamp and use radians and metres per second.
@@ -178,6 +178,6 @@ Do **not** include generated `build/`, `install/`, or `log/` folders, a Python v
 
 ## What organizers will do
 
-Organizers will place the submitted package source in a separate workspace on the competition laptop, build it against the installed ROS 2 Jazzy and competition simulator, and run the declared controller command. They will not need to merge your controller into the simulator source.
+Organizers will place the submitted package source in a separate workspace on the competition laptop, build it against the installed ROS 2 Lyrical and competition simulator, and run the declared controller command. They will not need to merge your controller into the simulator source.
 
 A package that builds only on one team member’s machine, depends on undeclared software, uses different topic names, or needs manual source edits before launch is not ready for submission. Test from a clean copy of your submitted source before the deadline.

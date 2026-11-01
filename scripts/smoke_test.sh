@@ -5,14 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 WS="$REPO_ROOT/starter_ws"
 
-source_environment() {
-  set +u
-  # shellcheck disable=SC1090
-  source "$1"
-  set -u
-}
-
-source_environment /opt/ros/jazzy/setup.bash
+# shellcheck source=ros_environment.sh
+source "$SCRIPT_DIR/ros_environment.sh"
+source_ros_lyrical
+check_workspace_platform "$WS" launch
 source_environment "$WS/.venv/bin/activate"
 source_environment "$WS/install/setup.bash"
 
@@ -56,6 +52,10 @@ echo
 ros2 topic info /scan
 ros2 topic info /ego_racecar/odom
 ros2 topic info /drive
-ros2 topic echo /competition/race_status --once
-ros2 topic echo /competition/lap_count --once
+timeout 15s ros2 topic echo /competition/race_status --once
+timeout 15s ros2 topic echo /competition/lap_count --once
 
+
+# Verify live messages, not only graph discovery.
+timeout 15s ros2 topic echo /scan --once >/dev/null
+timeout 15s ros2 topic echo /ego_racecar/odom --once >/dev/null
