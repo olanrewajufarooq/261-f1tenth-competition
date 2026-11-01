@@ -1,0 +1,6 @@
+quick_chase_controller:
+  ros__parameters:
+    enable_motion: true
+    maximum_speed: 1.5
+    lookahead: 0.65
+    lateral_acceleration: 0.6
