@@ -2,6 +2,8 @@
 
 import math
 
+import numpy as np
+
 
 class CollisionAvoidance:
     """Limit forward speed using available stopping clearance."""
@@ -25,6 +27,18 @@ class CollisionAvoidance:
         self.braking_deceleration = braking_deceleration
         self.reaction_time = reaction_time
         self.clearance_margin = clearance_margin
+
+    def stopping_distance(self, measured_speed):
+        """Travel reserve for measured speed, reaction latency and braking."""
+        if not math.isfinite(measured_speed) or measured_speed < 0.0:
+            raise ValueError("Measured speed must be finite and nonnegative.")
+        return (self.clearance_margin + measured_speed * self.reaction_time
+                + measured_speed ** 2 / (2.0 * self.braking_deceleration))
+
+    def required_horizon(self, measured_speed, requested_speed):
+        """Cover both current momentum and the requested operating speed."""
+        return max(0.75, self.stopping_distance(measured_speed),
+                    self.stopping_distance(requested_speed)) + 0.025
 
     def limit_speed(self, requested_speed, clearance):
         """Return a forward speed whose stopping distance fits the clearance.
@@ -180,7 +194,7 @@ class CollisionAvoidance:
         obstacle_points,
         steering,
         horizon=2.0,
-        sample_step=0.05,
+        sample_step=0.025,
         wheelbase=0.3302,
         length=0.58,
         width=0.31,
@@ -212,12 +226,14 @@ class CollisionAvoidance:
             raise ValueError("Steering must be between -pi/2 and pi/2.")
 
         points = tuple(obstacle_points)
+
         if not all(
             math.isfinite(x) and math.isfinite(y)
             for x, y in points
         ):
             raise ValueError("Obstacle coordinates must be finite.")
 
+        points_array = np.asarray(points, dtype=float).reshape((-1, 2))
         curvature = math.tan(steering) / wheelbase
 
         # Bound how far any body point can move between sampled poses.
@@ -243,16 +259,14 @@ class CollisionAvoidance:
             distance = min(index * sample_step, horizon)
             pose = self.pose_on_arc(distance, steering, wheelbase)
 
-            if any(
-                self.footprint_contains(
-                    point,
-                    pose,
-                    length=checked_length,
-                    width=checked_width,
-                    rear_axle_to_center=rear_axle_to_center,
-                )
-                for point in points
-            ):
+            # Transform all returns together; avoid a Python footprint call
+            # for every beam at every sampled pose.
+            offsets = points_array - np.asarray(pose[:2])
+            cosine, sine = math.cos(pose[2]), math.sin(pose[2])
+            forward = cosine * offsets[:, 0] + sine * offsets[:, 1]
+            lateral = -sine * offsets[:, 0] + cosine * offsets[:, 1]
+            if np.any((np.abs(forward - rear_axle_to_center) <= checked_length / 2)
+                        & (np.abs(lateral) <= checked_width / 2)):
                 return previous_distance
 
             previous_distance = distance

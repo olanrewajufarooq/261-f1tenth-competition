@@ -1,8 +1,8 @@
-
-"""Observe controller decisions while keeping the vehicle stopped."""
+"""Fail-closed, opt-in integration of steering and clearance checks."""
 
 import math
 import time
+from bisect import bisect_right
 from pathlib import Path
 
 import rclpy
@@ -14,9 +14,12 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
 
 from quick_chase_controller.collision_avoidance import CollisionAvoidance
+from quick_chase_controller.clearance_path_planner import ClearancePathPlanner
+from quick_chase_controller.sensor_safety import SensorSafety
 from quick_chase_controller.occupancy_map import OccupancyMap
 from quick_chase_controller.pure_pursuit_controller import PurePursuitController
 from quick_chase_controller.reference_path import ReferencePath
+from quick_chase_controller.speed_profile import SpeedProfile
 
 
 class ControllerNode(Node):
@@ -25,23 +28,24 @@ class ControllerNode(Node):
     def __init__(self):
         super().__init__("quick_chase_controller")
 
-        maps = Path(
-            get_package_share_directory("f1tenth_gym_ros")
-        ) / "maps"
-
-        path = ReferencePath.from_csv(maps / "levine_centerline.csv")
-        self.occupancy_map = OccupancyMap.from_yaml(maps / "levine.yaml")
-        self.controller = PurePursuitController(path)
-        self.avoidance = CollisionAvoidance()
-
         self.declare_parameter("enable_motion", False)
-        self.declare_parameter("maximum_speed", 0.2)
+        self.declare_parameter("maximum_speed", 0.6)
+        self.declare_parameter("lookahead", 0.65)
+        self.declare_parameter("lateral_acceleration", 0.6)
         self.motion_enabled = self.get_parameter("enable_motion").value
         self.maximum_speed = self.get_parameter("maximum_speed").value
+        self.lookahead = self.get_parameter("lookahead").value
+        if not math.isfinite(self.maximum_speed) or not 0 < self.maximum_speed <= 1.5:
+            raise ValueError("maximum_speed must be in (0, 1.5].")
+        if not math.isfinite(self.lookahead) or self.lookahead <= 0.0:
+            raise ValueError("lookahead must be finite and positive.")
+        self.controller = None
+        self.startup_error = None
+        self.avoidance = CollisionAvoidance()
+        self.speed_profile = SpeedProfile(
+            lateral_acceleration=self.get_parameter("lateral_acceleration").value)
 
-        if not math.isfinite(self.maximum_speed) or not 0 < self.maximum_speed <= 0.6:
-            raise ValueError("maximum_speed must be in (0, 0.6].")
-
+        self.command_deadline_failure = None
         self.last_speed = 0.0
         self.last_publish_at = time.monotonic()
         self.scan = None
@@ -62,9 +66,49 @@ class ControllerNode(Node):
             qos_profile_sensor_data,
         )
 
+        # A failed or unfinished startup never exposes a controller to motion.
+        self.publish_stop()
+        try:
+            maps = Path(get_package_share_directory("f1tenth_gym_ros")) / "maps"
+            baseline = ReferencePath.from_csv(maps / "levine_centerline.csv")
+            self.occupancy_map = OccupancyMap.from_yaml(maps / "levine.yaml")
+            expected_origin = (-51.224998, -51.224998, 0.0)
+            if (self.occupancy_map.image.size != (2048, 2048)
+                    or not math.isclose(self.occupancy_map.resolution, 0.05, abs_tol=1e-9)
+                    or any(not math.isclose(actual, expected, abs_tol=1e-5)
+                            for actual, expected in zip(self.occupancy_map.origin,
+                                                        expected_origin))):
+                raise ValueError("Unexpected Levine map geometry; refusing motion.")
+            planner = ClearancePathPlanner()
+            path = planner.plan(baseline, self.occupancy_map)
+            if not planner.diagnostics.get("success", False):
+                raise ValueError(f"Planner rejected route: {planner.diagnostics}")
+            # Validate the returned geometry before handing it to steering.
+            for index, (x, y) in enumerate(path.points):
+                end = path.points[(index + 1) % len(path.points)]
+                yaw = math.atan2(end[1] - y, end[0] - x)
+                length = path.segment_lengths[index]
+                samples = max(1, math.ceil(length / 0.025))
+                for sample in range(samples + 1):
+                    fraction = sample / samples
+                    rear_x = x + fraction * (end[0] - x)
+                    rear_y = y + fraction * (end[1] - y)
+                    padding = self.avoidance.clearance_margin + 0.025
+                    if not self.occupancy_map.is_rectangle_free(
+                            rear_x + 0.17145 * math.cos(yaw),
+                            rear_y + 0.17145 * math.sin(yaw), yaw,
+                            0.58 + 2 * padding, 0.31 + 2 * padding):
+                        raise ValueError(f"Planned footprint blocked at segment {index}.")
+            self.controller = PurePursuitController(path, lookahead=self.lookahead)
+            self.get_logger().info(f"Planning diagnostics: {planner.diagnostics}")
+        except (ValueError, OSError, RuntimeError) as error:
+            self.startup_error = str(error)
+            self.get_logger().error(f"Startup stopped: {error}")
+        self.publish_stop()
+
         self.timer = self.create_timer(0.05, self.control_callback)
         self.get_logger().info(
-            "Controller ready. Motion requires enable_motion:=true."
+            "Controller startup complete. Motion requires a validated route and enable_motion:=true."
         )
 
     def scan_callback(self, message):
@@ -112,25 +156,39 @@ class ControllerNode(Node):
         # Publish only after validating inputs and the calculated command.
 
         now = time.monotonic()
-
-        if self.scan is None or self.odom is None:
+        if self.command_deadline_failure is None:
+            self.command_deadline_failure = SensorSafety.command_gap_reason(
+                now, self.last_publish_at, self.last_speed)
+        if self.command_deadline_failure:
             self.publish_stop()
-            self.report("Waiting for LiDAR and odometry.")
+            self.report(f"stop_reason={self.command_deadline_failure}; restart required")
             return
 
-        if (
-            now - self.scan_received_at > 0.25
-            or now - self.odom_received_at > 0.25
-        ):
+        if self.controller is None:
             self.publish_stop()
-            self.report("Stopped: sensor data is stale.")
+            self.report(f"stop_reason=startup: {self.startup_error}")
+            return
+        reason = self.sensor_freshness(now)
+        if reason:
+            self.publish_stop()
+            self.report(f"stop_reason={reason}")
             return
 
         started_at = time.monotonic()
 
+        context = "x=unknown y=unknown yaw=unknown path_error=unknown segment=unknown"
         try:
             pose = self.vehicle_pose()
+            progress, path_error = self.controller.reference_path.project(*pose[:2])
+            segment = bisect_right(
+                self.controller.reference_path.cumulative_distances, progress) - 1
+            context = (f"x={pose[0]:.5f} y={pose[1]:.5f} yaw={pose[2]:.5f} "
+                        f"path_error={path_error:.3f} segment={segment}")
             steering = self.controller.calculate_steering(*pose)
+            velocity = self.odom.twist.twist.linear
+            measured_speed = math.hypot(velocity.x, velocity.y)
+            if not math.isfinite(measured_speed):
+                raise ValueError("Odometry speed is nonfinite.")
             scan = self.scan
 
             if scan.header.frame_id != "ego_racecar/laser":
@@ -155,10 +213,14 @@ class ControllerNode(Node):
                 raise ValueError("Scan does not cover the forward hemisphere.")
 
             # Reserve space for the body and sensor offset within range_max.
-            horizon = min(0.75, scan.range_max - 0.8)
-            if horizon <= 0.0:
-                raise ValueError("LiDAR range is too short.")
+            horizon = self.avoidance.required_horizon(measured_speed, self.maximum_speed)
+            if horizon > scan.range_max - 0.8:
+                raise ValueError("LiDAR range cannot cover measured-speed stopping horizon.")
 
+            preview_distance = max(self.lookahead, horizon)
+            nominal_speed = self.speed_profile.calculate(
+                self.controller.reference_path, progress, self.maximum_speed,
+                preview_distance)
             map_clearance = self.avoidance.clearance_on_map(
                 self.occupancy_map, pose, steering, horizon=horizon
             )
@@ -166,23 +228,34 @@ class ControllerNode(Node):
                 points, steering, horizon=horizon
             )
             clearance = min(map_clearance, lidar_clearance)
-            candidate_speed = self.avoidance.limit_speed(self.maximum_speed, clearance)
+            limiting_check = "map" if map_clearance <= lidar_clearance else "lidar"
+            candidate_speed = self.avoidance.limit_speed(nominal_speed, clearance)
+            stop_reason = "none"
+            if clearance < self.avoidance.stopping_distance(measured_speed):
+                candidate_speed = 0.0
+                stop_reason = "measured_speed_braking_reserve"
+            elif candidate_speed == 0.0:
+                stop_reason = "clearance"
 
         except ValueError as error:
             self.publish_stop()
-            self.report(f"Stopped: {error}")
+            elapsed_ms = (time.monotonic() - started_at) * 1000.0
+            self.report(f"{context} limiting_check=input_validation "
+                        f"compute={elapsed_ms:.1f} ms stop_reason={error}")
             return
 
         finished_at = time.monotonic()
         elapsed_ms = (finished_at - started_at) * 1000.0
 
-        if (
-            elapsed_ms > 50.0
-            or finished_at - self.scan_received_at > 0.25
-            or finished_at - self.odom_received_at > 0.25
-        ):
+        self.command_deadline_failure = SensorSafety.command_gap_reason(
+            finished_at, self.last_publish_at, self.last_speed)
+        reason = (self.command_deadline_failure
+                    or ("calculation_deadline" if elapsed_ms > 50.0
+                        else self.sensor_freshness(finished_at)))
+        if reason:
             self.publish_stop()
-            self.report("Stopped: calculation deadline or sensor freshness exceeded.")
+            self.report(f"{context} limiting_check={limiting_check} "
+                        f"stop_reason={reason}; compute={elapsed_ms:.1f} ms")
             return
 
         if self.motion_enabled:
@@ -191,14 +264,32 @@ class ControllerNode(Node):
             self.publish_command(speed, steering)
         else:
             self.publish_stop()
+            stop_reason = "motion_disabled"
 
         self.report(
-            f"steering={steering:.3f} rad, "
+            f"x={pose[0]:.5f} y={pose[1]:.5f} yaw={pose[2]:.5f} "
+            f"path_error={path_error:.3f} segment={segment} "
+            f"limiting_check={limiting_check} stop_reason={stop_reason} "
+            f"measured_speed={measured_speed:.3f} steering={steering:.3f} rad, "
             f"map={map_clearance:.2f} m, "
             f"lidar={lidar_clearance:.2f} m, "
-            f"candidate={candidate_speed:.2f} m/s, "
+            f"nominal={nominal_speed:.2f} candidate={candidate_speed:.2f} m/s, "
             f"compute={elapsed_ms:.1f} ms; published={self.last_speed:.2f} m/s"
         )
+
+    def sensor_freshness(self, now):
+        ros_now = self.get_clock().now().nanoseconds * 1e-9
+        for name in ("scan", "odom"):
+            message = getattr(self, name)
+            if message is None:
+                return f"waiting_for_{name}"
+            stamp = message.header.stamp
+            reason = SensorSafety.check(
+                getattr(self, f"{name}_received_at"),
+                stamp.sec + stamp.nanosec * 1e-9, now, ros_now)
+            if reason:
+                return f"{name}: {reason}"
+        return None
 
     def report(self, message):
         """Limit diagnostic output to approximately once per second."""

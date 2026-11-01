@@ -27,6 +27,8 @@ class TestReferencePath(unittest.TestCase):
             )
             path = ReferencePath.from_csv(filename)
 
+        self.assertEqual(path.widths, ((1.0, 1.0),) * 3)
+
         self.assertEqual(
             path.points,
             ((0.0, 0.0), (2.0, 0.0), (2.0, 2.0)),

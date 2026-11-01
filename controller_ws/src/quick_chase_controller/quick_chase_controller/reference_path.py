@@ -8,7 +8,7 @@ from bisect import bisect_right
 class ReferencePath:
     """Store and query an ordered, closed reference path."""
 
-    def __init__(self, points):
+    def __init__(self, points, widths=None):
         self.points = tuple((float(x), float(y)) for x, y in points)
 
         if len(self.points) < 3:
@@ -20,6 +20,18 @@ class ReferencePath:
             for value in point
         ):
             raise ValueError("Path coordinates must be finite.")
+
+        self.widths = None if widths is None else tuple(
+            (float(right), float(left)) for right, left in widths
+        )
+
+        if self.widths is not None and (
+            len(self.widths) != len(self.points) or not all(
+                math.isfinite(value) and value > 0
+                for pair in self.widths for value in pair
+            )
+        ):
+            raise ValueError("Widths must be positive finite pairs for every point.")
 
         lengths = []
         distances = [0.0]
@@ -42,6 +54,7 @@ class ReferencePath:
     def from_csv(cls, filename):
         """Load the supplied x, y, right-width, left-width CSV format."""
         points = []
+        widths = []
 
         with open(filename, encoding="utf-8") as stream:
             lines = (
@@ -62,8 +75,9 @@ class ReferencePath:
                     raise ValueError("Track widths must be finite and positive.")
 
                 points.append((x, y))
+                widths.append((right_width, left_width))
 
-        return cls(points)
+        return cls(points, widths=widths)
 
     def point_at(self, distance):
         """Return interpolated (x, y) at a distance along the closed path."""
@@ -85,6 +99,19 @@ class ReferencePath:
             start[0] + fraction * (end[0] - start[0]),
             start[1] + fraction * (end[1] - start[1]),
         )
+
+    def widths_at(self, distance):
+        """Interpolate official (right, left) widths, including the seam."""
+        if self.widths is None:
+            raise ValueError("Reference path has no track widths.")
+        if not math.isfinite(distance):
+            raise ValueError("Distance must be finite.")
+        distance %= self.total_length
+        index = bisect_right(self.cumulative_distances, distance) - 1
+        fraction = ((distance - self.cumulative_distances[index])
+                    / self.segment_lengths[index])
+        return tuple(a + fraction * (b - a) for a, b in zip(
+            self.widths[index], self.widths[(index + 1) % len(self.points)]))
 
     def project(self, x, y):
         """Return (progress, distance_to_path), both measured in metres."""
@@ -116,4 +143,3 @@ class ReferencePath:
                 )
 
         return best_progress % self.total_length, best_error
-        

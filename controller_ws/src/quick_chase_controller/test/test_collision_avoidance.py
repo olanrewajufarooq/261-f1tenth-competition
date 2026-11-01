@@ -306,6 +306,38 @@ class TestCollisionAvoidance(unittest.TestCase):
         )
         self.assertEqual(clearance, 0.0)
 
+    def test_horizon_covers_actual_momentum_above_command(self):
+        horizon = self.avoidance.required_horizon(2.0, 0.2)
+        self.assertGreater(horizon, self.avoidance.stopping_distance(2.0))
+        self.assertGreater(horizon, self.avoidance.required_horizon(0.2, 0.2))
+
+    def test_stopping_distance_uses_measured_speed(self):
+        self.assertAlmostEqual(self.avoidance.stopping_distance(0.5), 0.35)
+        for speed in (-1.0, math.nan, math.inf):
+            with self.assertRaises(ValueError):
+                self.avoidance.stopping_distance(speed)
+
+    def test_default_lidar_sampling_matches_explicit_map_step(self):
+        points = [(0.95, 0.19), (0.7, -0.21), (1.2, 0.0)]
+        for steering in (-0.35, 0.0, 0.35):
+            self.assertEqual(
+                self.avoidance.clearance_along_arc(points, steering),
+                self.avoidance.clearance_along_arc(points, steering, sample_step=0.025))
+
+    def test_captured_pose_on_synthetic_open_map_and_scan(self):
+        # No captured scan exists: this checks coordinate/sampling handling,
+        # not replay of the reported collision.
+        pose = (-12.67376, 8.22197, -2.84466)
+        occupancy_map = OccupancyMap(
+            Image.new("L", (200, 200), 255), 0.05,
+            (pose[0] - 5.0, pose[1] - 5.0, 0.0))
+        for steering in (-0.35, 0.0, 0.35):
+            self.assertEqual(self.avoidance.clearance_on_map(
+                occupancy_map, pose, steering, horizon=0.775), 0.775)
+            # Synthetic return inside the current body must stop at any yaw.
+            self.assertEqual(self.avoidance.clearance_along_arc(
+                [(0.2, 0.0)], steering, horizon=0.775), 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

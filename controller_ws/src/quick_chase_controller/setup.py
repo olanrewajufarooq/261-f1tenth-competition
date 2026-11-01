@@ -12,7 +12,9 @@ setup(
         ('share/' + package_name, ['package.xml']),
     ],
     package_data={'': ['py.typed']},
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools', 'numpy', 'scipy', 'Pillow', 'PyYAML'
+    ],
     zip_safe=True,
     maintainer='Farooq Olanrewaju',
     maintainer_email='olanrewajufarooq@gmail.com',

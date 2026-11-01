@@ -51,7 +51,7 @@ class TestOccupancyMap(unittest.TestCase):
 
     def test_rejects_nonfinite_position(self):
         self.assertFalse(self.map.is_free(float("nan"), 0.5))
-    
+
     def test_rectangle_is_free_in_open_space(self):
         image = Image.new("L", (40, 40), 255)
         occupancy_map = OccupancyMap(image, 0.1, (0.0, 0.0, 0.0))
