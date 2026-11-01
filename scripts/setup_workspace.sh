@@ -4,34 +4,26 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 WS="$REPO_ROOT/starter_ws"
-ROS_SETUP="/opt/ros/jazzy/setup.bash"
 ROS_REPO="$WS/src/f1tenth_gym_ros"
 GYM_REPO="$ROS_REPO/f1tenth_gym"
 
 ROS_COMMIT="2c019810b4098ed82d44cad1d7d282a2dfc12421"
 GYM_COMMIT="ec3b1a4693ed20317e42e57a9454d94b824cec81"
 
-# ROS and colcon-generated setup files may read variables before defining them.
-# Temporarily disable Bash nounset while sourcing those trusted environment files.
-source_environment() {
-  set +u
-  # shellcheck disable=SC1090
-  source "$1"
-  set -u
-}
+# shellcheck source=ros_environment.sh
+source "$SCRIPT_DIR/ros_environment.sh"
+require_lyrical_shell
 
-if [[ ! -f "$ROS_SETUP" ]]; then
-  echo "ROS 2 Jazzy was not found at $ROS_SETUP."
-  echo "Follow docs/INSTALL.md before running this script."
+# Lyrical's binary ROS Python packages must use Ubuntu's system interpreter.
+# shellcheck disable=SC1091
+source /etc/os-release
+if [[ "$ID" != ubuntu || "$VERSION_ID" != 26.04 || "$(uname -m)" != x86_64 ]]; then
+  echo "This branch targets native Ubuntu 26.04 x86_64 with ROS 2 Lyrical." >&2
   exit 1
 fi
-
-if [[ "$(uname -m)" != "x86_64" ]]; then
-  echo "This setup was validated only on x86_64."
-  exit 1
-fi
-
-source_environment "$ROS_SETUP"
+source_ros_lyrical
+/usr/bin/python3 -c "import rclpy"
+check_workspace_platform "$WS" setup
 mkdir -p "$WS/src"
 
 if [[ ! -d "$ROS_REPO/.git" ]]; then
@@ -59,7 +51,7 @@ git -C "$GYM_REPO" fetch origin dev-jax
 git -C "$GYM_REPO" checkout --detach "$GYM_COMMIT"
 
 if [[ ! -d "$WS/.venv" ]]; then
-  python3 -m venv --system-site-packages "$WS/.venv"
+  /usr/bin/python3 -m venv --system-site-packages "$WS/.venv"
 fi
 
 source_environment "$WS/.venv/bin/activate"
@@ -76,8 +68,10 @@ if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
 fi
 
 rosdep update
-rosdep install   --from-paths "$WS/src"   --ignore-src   --rosdistro jazzy   -r -y
+rosdep install   --from-paths "$WS/src"   --ignore-src   --rosdistro lyrical   -y
 
+# Mark before building so an interrupted Lyrical build can be resumed.
+workspace_platform > "$WS/.platform"
 cd "$WS"
 python /usr/bin/colcon build --symlink-install
 source_environment "$WS/install/setup.bash"
@@ -87,7 +81,7 @@ ros2 pkg prefix competition_bringup
 ros2 pkg prefix competition_teleop
 ros2 pkg prefix competition_ui
 ros2 pkg prefix race_monitor
-python -c "import f1tenth_gym; print(f1tenth_gym.__file__)"
+python -c "import rclpy, f1tenth_gym, jax, numba, numpy, scipy, PyQt6; print(f1tenth_gym.__file__); print(jax.numpy.add(1, 1).block_until_ready())"
 python -m pip check
 
 echo

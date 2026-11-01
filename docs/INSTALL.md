@@ -1,12 +1,14 @@
 # Installation guide
 
-These instructions reproduce the native installation validated for the
-competition starter workspace.
+These instructions target the native ROS 2 Lyrical adaptation of the V1.1
+competition starter workspace. This port is experimental until native build
+and simulator checks are recorded in [LYRICAL_VALIDATION.md](LYRICAL_VALIDATION.md).
+Use a fresh terminal without another ROS distribution or workspace sourced.
 
-## 1. Supported system
+## 1. Target system
 
-- Ubuntu 24.04.5 LTS, x86_64
-- ROS 2 Jazzy
+- Ubuntu 26.04 LTS, x86_64
+- ROS 2 Lyrical
 - Bash shell
 - Native installation, not Docker
 
@@ -54,17 +56,21 @@ locale
 `LANG=en_US.UTF-8` is expected. An empty `LC_ALL` is also valid when locale
 categories inherit from `LANG`.
 
-## 3. Install ROS 2 Jazzy
+The system Python is expected to be Python 3.14. Do not create this workspace's
+virtual environment using a separate Python 3.12 installation: the ROS binary
+Python modules must match the system interpreter.
+
+## 3. Install ROS 2 Lyrical
 
 Enable Universe and install the ROS apt-source helper:
 
 ```bash
-sudo add-apt-repository universe
+sudo add-apt-repository -y universe
 sudo apt update
 
-export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F '"tag_name"' | awk -F'"' '{print $4}')
+ROS_APT_SOURCE_VERSION=$(curl -fsSL https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')
 
-curl -L -o /tmp/ros2-apt-source.deb \
+curl -fL -o /tmp/ros2-apt-source.deb \
   "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo ${UBUNTU_CODENAME:-${VERSION_CODENAME}})_all.deb"
 
 sudo dpkg -i /tmp/ros2-apt-source.deb
@@ -74,13 +80,13 @@ sudo apt update
 Install ROS 2 Desktop and its development tools:
 
 ```bash
-sudo apt install -y ros-jazzy-desktop ros-dev-tools
+sudo apt install -y ros-lyrical-desktop ros-dev-tools qt6-base-dev
 ```
 
 Load and verify ROS:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/lyrical/setup.bash
 echo "$ROS_DISTRO"
 ros2 pkg prefix rviz2
 ```
@@ -88,8 +94,8 @@ ros2 pkg prefix rviz2
 Expected:
 
 ```text
-jazzy
-/opt/ros/jazzy
+lyrical
+/opt/ros/lyrical
 ```
 
 Initialize rosdep once:
@@ -104,7 +110,7 @@ If rosdep reports that `20-default.list` already exists, continue with
 
 At this point, the manually installed prerequisites are complete. During
 workspace setup, `rosdep` installs package-level dependencies such as
-Ackermann messages, Nav2 map server, robot state publisher, Eigen, RViz, and
+Ackermann messages, Nav2 map server, robot state publisher, RViz, and
 the Foxglove bridge. The setup script also creates the virtual environment and
 installs the pinned Python simulator dependencies inside it.
 
@@ -112,11 +118,11 @@ installs the pinned Python simulator dependencies inside it.
 
 ```bash
 git --version
-python3 --version
+/usr/bin/python3 --version
 python3 -m venv --help >/dev/null && echo "python3-venv: OK"
 rosdep --version
 colcon --help >/dev/null && echo "colcon: OK"
-test -f /opt/ros/jazzy/setup.bash && echo "ROS 2 Jazzy: OK"
+test -f /opt/ros/lyrical/setup.bash && echo "ROS 2 Lyrical: OK"
 ```
 
 If all commands finish without an error, continue with the repository setup.
@@ -124,12 +130,12 @@ If all commands finish without an error, continue with the repository setup.
 ## 5. Clone this repository
 
 ```bash
-git clone --branch v1.1 --single-branch \
-  https://github.com/KayiiX/CIE-KFUPM-F1tenth-Autonomous-Racing-Competition.git
-cd CIE-KFUPM-F1tenth-Autonomous-Racing-Competition
+git clone --branch lyrical --single-branch \
+  https://github.com/olanrewajufarooq/261-f1tenth-competition.git
+cd 261-f1tenth-competition
 ```
 
-Confirm that the V1.1 competition branch is active:
+Confirm that the Lyrical adaptation branch is active:
 
 ```bash
 git branch --show-current
@@ -138,7 +144,7 @@ git branch --show-current
 Expected output:
 
 ```text
-v1.1
+lyrical
 ```
 
 ## 6. Set up and build
@@ -149,13 +155,19 @@ v1.1
 
 The script:
 
-1. clones the Jazzy ROS bridge at the tested commit;
-2. clones the JAX simulator backend at the tested commit;
+1. clones the upstream `dev-jazzy` ROS bridge at the pinned commit;
+2. clones the JAX simulator backend at the pinned commit;
 3. creates `starter_ws/.venv` with access to system ROS Python packages;
-4. pins setuptools below version 80;
+4. retains the baseline setuptools 79.0.1 compatibility pin;
 5. installs the simulator backend and Python compatibility fixes;
-6. resolves ROS dependencies with rosdep;
-7. builds the workspace through the virtual-environment Python interpreter.
+6. resolves ROS dependencies for Lyrical with rosdep (may prompt for sudo);
+7. builds the C++20 / Qt6 dashboard and workspace through the virtual-environment Python interpreter;
+8. verifies ROS/simulator imports, performs a small JAX computation, and runs pip check.
+
+The `.platform` marker records `lyrical:<system Python major.minor>`. Setup writes
+it before colcon builds so an interrupted build can resume. A marker alone does
+not mean the build succeeded. Launch commands also require the built workspace
+and virtual environment. Never reuse generated files from a Jazzy checkout.
 
 ## 7. Launch
 
@@ -240,7 +252,7 @@ and subscribes to the `/competition/*` timing topics.
 To restart RViz manually while the simulator is still running:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/lyrical/setup.bash
 source starter_ws/.venv/bin/activate
 source starter_ws/install/setup.bash
 
@@ -272,6 +284,44 @@ starter_ws/src/f1tenth_gym_ros/config/foxglove/gym_bridge_foxglove.json
 
 ## Troubleshooting
 
+### Another ROS distribution is already sourced
+
+If a script reports a conflicting ROS distribution or prefix, open a fresh
+terminal and remove any automatic Jazzy/workspace sourcing from that terminal's
+startup configuration. Merely unsetting `ROS_DISTRO` does not remove old Python
+or library paths. Source only `/opt/ros/lyrical/setup.bash` for this branch.
+
+### Existing workspace or virtual environment is incompatible
+
+Setup refuses unmarked build outputs, a different platform marker, a different
+Python minor version, a copied/moved venv, or a venv without access to system ROS packages. Preserve
+old outputs by moving the following out of `starter_ws` into a separate backup
+directory: `.venv`, `build`, `install`, `log`, and `.platform` (when present).
+Then rerun setup in a fresh terminal. Keep simulator source checkouts and student
+controller source files. Python venvs are not relocatable: recreate the venv at
+the new worktree path instead of copying one from another checkout.
+
+### Setup cannot resolve a Lyrical dependency
+
+Do not install a Jazzy package as a substitute. Save the complete rosdep or pip
+error and check the named package's Lyrical / Python 3.14 support. The pinned
+simulator advertises Python 3.14 support, but this branch's full native package
+combination still needs validation.
+
+### Dashboard cannot load
+
+The dashboard must compile against Qt6, matching Lyrical RViz on Ubuntu 26.04.
+After setup, inspect missing or mixed Qt libraries with:
+
+```bash
+ldd starter_ws/install/competition_ui/lib/librace_dashboard_panel.so
+```
+
+There should be no `not found` entries or Qt5 libraries. Launch RViz and confirm
+the Race Dashboard is visible and updates; a successful build alone does not
+prove that the plugin loads.
+
+
 ### The bridge cannot import f1tenth_gym
 
 Symptom:
@@ -284,7 +334,7 @@ Rebuild using the virtual-environment interpreter:
 
 ```bash
 cd starter_ws
-source /opt/ros/jazzy/setup.bash
+source /opt/ros/lyrical/setup.bash
 source .venv/bin/activate
 python /usr/bin/colcon build --symlink-install
 ```

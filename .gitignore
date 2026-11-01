@@ -21,4 +21,6 @@ starter_ws/src/f1tenth_gym_ros/
 .idea/
 .DS_Store
 
-
+# Local planning artifacts and generated platform metadata
+docs/superpowers/
+starter_ws/.platform

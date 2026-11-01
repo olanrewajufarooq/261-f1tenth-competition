@@ -2,18 +2,18 @@ cmake_minimum_required(VERSION 3.8)
 project(competition_ui)
 
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake_ros REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-set(CMAKE_AUTOMOC ON)
-qt5_wrap_cpp(MOC_FILES
+qt6_wrap_cpp(MOC_FILES
   include/competition_ui/race_dashboard_panel.hpp
 )
 
@@ -22,18 +22,20 @@ add_library(race_dashboard_panel SHARED
   ${MOC_FILES}
 )
 
+target_compile_features(race_dashboard_panel PUBLIC cxx_std_20)
+
 target_include_directories(race_dashboard_panel PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(race_dashboard_panel
-  pluginlib
-  rclcpp
-  rviz_common
-  std_msgs
+target_link_libraries(race_dashboard_panel PUBLIC
+  pluginlib::pluginlib
+  rclcpp::rclcpp
+  rviz_common::rviz_common
+  std_msgs::std_msgs
+  Qt6::Widgets
 )
-target_link_libraries(race_dashboard_panel Qt5::Widgets)
 
 install(
   TARGETS race_dashboard_panel
