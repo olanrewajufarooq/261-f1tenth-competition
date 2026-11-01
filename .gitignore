@@ -9,12 +9,22 @@ starter_ws/build/
 starter_ws/install/
 starter_ws/log/
 
+# Controller workspace generated files
+/controller_ws/build/
+/controller_ws/install/
+/controller_ws/log/
+*.egg-info/
+
 # External repositories cloned by setup_workspace.sh
 starter_ws/src/f1tenth_gym_ros/
 
 # ROS runtime data
 .ros/
 *.log
+
+# Root build logs and local worktrees
+/log/
+/.worktrees/
 
 # Editors and OS files
 .vscode/
@@ -24,3 +34,4 @@ starter_ws/src/f1tenth_gym_ros/
 # Local planning artifacts and generated platform metadata
 docs/superpowers/
 starter_ws/.platform
+docs/competition/
