@@ -21,6 +21,8 @@ starter_ws/src/f1tenth_gym_ros/
 # ROS runtime data
 .ros/
 *.log
+build/
+install/
 
 # Root build logs and local worktrees
 /log/
